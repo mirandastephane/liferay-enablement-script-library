@@ -1,34 +1,79 @@
 $ErrorActionPreference = "Stop"
 
-# === COURSES (grouped by learning path) ===
-$CoursesContentManager = @(
-    "--publishing-tool-and-content-lifecycle"
-    "--pages-navigation"
-    "--search-engine-optimization"
-    "--content-search"
-    "--personalized-experiences"
-    "--classic-cms"
-    "--content-management-system"
+# === COURSES (loaded dynamically from course-launcher/courses/*.conf) ===
+function Import-CourseConfigs {
+    param([string]$ConfDir)
+    $configs = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($file in Get-ChildItem -Path $ConfDir -Filter "*.conf" | Sort-Object Name) {
+        $learningPath = $null
+        $courses = [System.Collections.Generic.List[string]]::new()
+        $inCourses = $false
+        foreach ($line in Get-Content $file.FullName) {
+            $trimmed = $line.Trim()
+            if ($trimmed -match '^LEARNING_PATH="(.+)"$') {
+                $learningPath = $Matches[1]
+            } elseif ($trimmed -eq 'COURSES=(') {
+                $inCourses = $true
+            } elseif ($trimmed -eq ')' -and $inCourses) {
+                $inCourses = $false
+            } elseif ($inCourses -and $trimmed -ne '') {
+                $courses.Add($trimmed)
+            }
+        }
+        if ($learningPath -and $courses.Count -gt 0) {
+            $configs.Add([PSCustomObject]@{ LearningPath = $learningPath; Courses = $courses.ToArray() })
+        }
+    }
+    return ,$configs
+}
+
+# Fallback used when .conf files are unreachable (e.g. iex/irm invocation).
+# Keep in sync with course-launcher/courses/*.conf.
+$_LearningPaths = @(
+    [PSCustomObject]@{
+        LearningPath = "Content Manager"
+        Courses = @(
+            "--publishing-tool-and-content-lifecycle"
+            "--pages-navigation"
+            "--search-engine-optimization"
+            "--content-search"
+            "--personalized-experiences"
+            "--classic-cms"
+            "--content-management-system"
+        )
+    }
+    [PSCustomObject]@{
+        LearningPath = "Site Building"
+        Courses = @("--building-enterprise-websites")
+    }
+    [PSCustomObject]@{
+        LearningPath = "Commerce"
+        Courses = @(
+            "--foundations-of-commerce"
+            "--commerce-users-and-accounts"
+            "--commerce-product-management"
+            "--commerce-inventory-management"
+            "--commerce-pricing"
+            "--commerce-order-management"
+            "--commerce-storefronts"
+        )
+    }
 )
 
-$CoursesSiteBuilding = @(
-    "--building-enterprise-websites"
-)
-
-$CoursesCommerce = @(
-    "--foundations-of-commerce"
-    "--users-and-accounts"
-    "--product-management"
-    "--inventory-management"
-    "--pricing"
-    "--order-management"
-    "--storefronts"
-)
+# Override fallback with .conf files when running from a local checkout
+$_ScriptPath = $MyInvocation.MyCommand.Path
+if ($_ScriptPath) {
+    $_ConfDir = Join-Path (Split-Path -Parent $_ScriptPath) "courses"
+    if (Test-Path $_ConfDir) {
+        $_loaded = Import-CourseConfigs -ConfDir $_ConfDir
+        if ($_loaded.Count -gt 0) { $_LearningPaths = $_loaded }
+    }
+}
 
 function Get-CourseKeys {
-    Write-Host "  Content Manager: $($script:CoursesContentManager -join ' | ')"
-    Write-Host "  Site Building:   $($script:CoursesSiteBuilding -join ' | ')"
-    Write-Host "  Commerce:        $($script:CoursesCommerce -join ' | ')"
+    foreach ($lp in $script:_LearningPaths) {
+        Write-Host "  $($lp.LearningPath): $($lp.Courses -join ' | ')"
+    }
 }
 
 function install-course {
@@ -65,22 +110,22 @@ function install-course {
         "--foundations-of-commerce" {
             $RepoUrl = "https://github.com/liferay/liferay-course-foundations-of-commerce/archive/refs/heads/main.zip"
         }
-        "--users-and-accounts" {
+        "--commerce-users-and-accounts" {
             $RepoUrl = "https://github.com/liferay/liferay-course-commerce-users-and-accounts/archive/refs/heads/main.zip"
         }
-        "--product-management" {
+        "--commerce-product-management" {
             $RepoUrl = "https://github.com/liferay/liferay-course-commerce-product-management/archive/refs/heads/main.zip"
         }
-        "--inventory-management" {
+        "--commerce-inventory-management" {
             $RepoUrl = "https://github.com/liferay/liferay-course-commerce-inventory-management/archive/refs/heads/main.zip"
         }
-        "--pricing" {
+        "--commerce-pricing" {
             $RepoUrl = "https://github.com/liferay/liferay-course-commerce-pricing/archive/refs/heads/main.zip"
         }
-        "--order-management" {
+        "--commerce-order-management" {
             $RepoUrl = "https://github.com/liferay/liferay-course-commerce-order-management/archive/refs/heads/main.zip"
         }
-        "--storefronts" {
+        "--commerce-storefronts" {
             $RepoUrl = "https://github.com/liferay/liferay-course-commerce-storefronts/archive/refs/heads/main.zip"
         }
         "--content-management-system" {

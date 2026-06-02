@@ -6,39 +6,45 @@ JAVA_REQUIRED_VERSION="21.0.1"
 RUNTIME_DIR="${HOME}/.liferay-course-runtime"
 JAVA_DIR="${RUNTIME_DIR}/zulu-java-21"
 
-# === COURSES (grouped by learning path) ===
-COURSES_CONTENT_MANAGER=(
-  --publishing-tool-and-content-lifecycle
-  --pages-navigation
-  --search-engine-optimization
-  --content-search
-  --personalized-experiences
-  --classic-cms
-  --content-management-system
+# === COURSES (loaded dynamically from course-launcher/courses/*.conf) ===
+# Fallback used when .conf files are unreachable (e.g. curl invocation).
+# Keep in sync with course-launcher/courses/*.conf.
+declare -a _LP_NAMES=("Content Manager" "Site Building" "Commerce")
+declare -a _LP_COURSES=(
+  "--publishing-tool-and-content-lifecycle --pages-navigation --search-engine-optimization --content-search --personalized-experiences --classic-cms --content-management-system"
+  "--building-enterprise-websites"
+  "--foundations-of-commerce --commerce-users-and-accounts --commerce-product-management --commerce-inventory-management --commerce-pricing --commerce-order-management --commerce-storefronts"
 )
 
-COURSES_SITE_BUILDING=(
-  --building-enterprise-websites
-)
+_load_course_configs() {
+  local conf_dir
+  conf_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/courses"
+  [[ -d "$conf_dir" ]] || return
+  local _found=0
+  for conf_file in "${conf_dir}"/*.conf; do
+    [[ -f "$conf_file" ]] && { _found=1; break; }
+  done
+  [[ $_found -eq 0 ]] && return
+  # Conf files present — replace fallback entirely
+  _LP_NAMES=()
+  _LP_COURSES=()
+  for conf_file in "${conf_dir}"/*.conf; do
+    [[ -f "$conf_file" ]] || continue
+    unset LEARNING_PATH COURSES
+    # shellcheck source=/dev/null
+    source "$conf_file"
+    _LP_NAMES+=("$LEARNING_PATH")
+    _LP_COURSES+=("${COURSES[*]}")
+  done
+}
 
-COURSES_COMMERCE=(
-  --foundations-of-commerce
-  --users-and-accounts
-  --product-management
-  --inventory-management
-  --pricing
-  --order-management
-  --storefronts
-)
+_load_course_configs
 
 list_course_keys() {
-  local joined
-  printf -v joined '%s | ' "${COURSES_CONTENT_MANAGER[@]}"
-  echo "  Content Manager: ${joined% | }"
-  printf -v joined '%s | ' "${COURSES_SITE_BUILDING[@]}"
-  echo "  Site Building:   ${joined% | }"
-  printf -v joined '%s | ' "${COURSES_COMMERCE[@]}"
-  echo "  Commerce:        ${joined% | }"
+  for i in "${!_LP_NAMES[@]}"; do
+    local joined="${_LP_COURSES[$i]// / | }"
+    printf "  %s: %s\n" "${_LP_NAMES[$i]}" "$joined"
+  done
 }
 
 # === ARGUMENTS ===
@@ -90,22 +96,22 @@ case "$COURSE_KEY" in
     --foundations-of-commerce)
     REPO_URL="https://github.com/liferay/liferay-course-foundations-of-commerce/archive/refs/heads/main.zip"
     ;;
-    --users-and-accounts)
+    --commerce-users-and-accounts)
     REPO_URL="https://github.com/liferay/liferay-course-commerce-users-and-accounts/archive/refs/heads/main.zip"
     ;;
-    --product-management)
+    --commerce-product-management)
     REPO_URL="https://github.com/liferay/liferay-course-commerce-product-management/archive/refs/heads/main.zip"
     ;;
-    --inventory-management)
+    --commerce-inventory-management)
     REPO_URL="https://github.com/liferay/liferay-course-commerce-inventory-management/archive/refs/heads/main.zip"
     ;;
-    --pricing)
+    --commerce-pricing)
     REPO_URL="https://github.com/liferay/liferay-course-commerce-pricing/archive/refs/heads/main.zip"
     ;;
-    --order-management)
+    --commerce-order-management)
     REPO_URL="https://github.com/liferay/liferay-course-commerce-order-management/archive/refs/heads/main.zip"
     ;;
-    --storefronts)
+    --commerce-storefronts)
     REPO_URL="https://github.com/liferay/liferay-course-commerce-storefronts/archive/refs/heads/main.zip"
     ;;
     --content-management-system)
